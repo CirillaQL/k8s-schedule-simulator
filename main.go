@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"github.com/CirillaQL/k8s-schedule-simulator/clustersnapshot"
 	"github.com/CirillaQL/k8s-schedule-simulator/predicatechecker"
@@ -9,7 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
+	"path/filepath"
 	"time"
 )
 
@@ -19,7 +25,7 @@ func BuildTestNode(name string, millicpu int64, mem int64) *apiv1.Node {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:     name,
 			SelfLink: fmt.Sprintf("/api/v1/nodes/%s", name),
-			Labels:   map[string]string{},
+			Labels:   map[string]string{"name": name},
 		},
 		Spec: apiv1.NodeSpec{
 			ProviderID: name,
@@ -57,6 +63,7 @@ func BuildTestPod(name string, cpu int64, mem int64, options ...func(*apiv1.Pod)
 			Annotations: map[string]string{},
 		},
 		Spec: apiv1.PodSpec{
+			NodeSelector: map[string]string{"name": "n1"},
 			Containers: []apiv1.Container{
 				{
 					Resources: apiv1.ResourceRequirements{
@@ -132,26 +139,50 @@ func singleNodeOk(nodeName string) func(*schedulerframework.NodeInfo) bool {
 }
 
 func main() {
+	var kubeconfig *string
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+	flag.Parse()
+
+	// use the current context in kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
 	clusterSnapshot := clustersnapshot.NewBasicClusterSnapshot()
-	predicateChecker, err := predicatechecker.NewTestPredicateChecker()
+	predicateChecker, err := predicatechecker.NewTestPredicateChecker(clientset)
 	if err != nil {
 		panic(err)
 	}
-	nodes := []*apiv1.Node{
-		buildReadyNode("n1", 10, 20),
-		buildReadyNode("n2", 10, 20),
+
+	nodes, err := clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
 	}
 
-	pods := []*apiv1.Pod{
-		buildScheduledPod("p1", 1, 1, "n1"),
+	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
 	}
 
-	newPods := []*apiv1.Pod{
-		BuildTestPod("p2", 5, 5),
-		BuildTestPod("p3", 5, 5),
+	podsTest := pods.Items[0]
+	fmt.Printf("选中Pod Name: %s \n", podsTest.Name)
+	newPods := []*apiv1.Pod{}
+	for i := 0; i < 100; i++ {
+		newPods = append(newPods, &podsTest)
 	}
 
-	clustersnapshot.InitializeClusterSnapshotOrDie(clusterSnapshot, nodes, pods)
+	clustersnapshot.InitializeClusterSnapshotOrDie(clusterSnapshot, nodes.Items, pods.Items)
 	s := scheduling.NewHintingSimulator(predicateChecker)
 	statuses, _, err := s.TrySchedulePods(clusterSnapshot, newPods, allTrue, false)
 	fmt.Println("调度状态：")

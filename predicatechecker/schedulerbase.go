@@ -129,6 +129,9 @@ func (p *SchedulerBasedPredicateChecker) FitsAnyNodeMatching(clusterSnapshot clu
 		if filterStatus.IsSuccess() {
 			p.lastIndex = (p.lastIndex + i + 1) % len(nodeInfosList)
 			return nodeInfo.Node().Name, nil
+		} else {
+			fmt.Printf("Pod调度失败,Name: %s", pod.Name)
+			fmt.Printf("%+v", filterStatus)
 		}
 	}
 	return "", fmt.Errorf("cannot put pod %s on any node", pod.Name)
