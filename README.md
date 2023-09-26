@@ -1,2 +1,3 @@
 # k8s-schedule-simulator
-使用k8s中的scheduler测试Pod是否可以调度到对应节点组上
+This project is used to check if given pods can be scheduled on the cluster, and this project is come from kubernetes's 
+cluster-autoscaler. 

@@ -176,7 +176,7 @@ func main() {
 	}
 
 	podsTest := pods.Items[0]
-	fmt.Printf("选中Pod Name: %s \n", podsTest.Name)
+	fmt.Printf("Choose Pod: %s \n", podsTest.Name)
 	newPods := []*apiv1.Pod{}
 	for i := 0; i < 100; i++ {
 		newPods = append(newPods, &podsTest)
@@ -185,10 +185,10 @@ func main() {
 	clustersnapshot.InitializeClusterSnapshotOrDie(clusterSnapshot, nodes.Items, pods.Items)
 	s := scheduling.NewHintingSimulator(predicateChecker)
 	statuses, _, err := s.TrySchedulePods(clusterSnapshot, newPods, allTrue, false)
-	fmt.Println("调度状态：")
+	fmt.Println("：")
 	for _, state := range statuses {
-		fmt.Printf("Node Name:  %s \n", state.NodeName)
-		fmt.Printf("对应Pod: %s \n", state.Pod.Name)
+		fmt.Printf("Node:  %s \n", state.NodeName)
+		fmt.Printf("Pod: %s \n", state.Pod.Name)
 	}
 }
 

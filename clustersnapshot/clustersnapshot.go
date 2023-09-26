@@ -39,3 +39,28 @@ type ClusterSnapshot interface {
 
 // ErrNodeNotFound means that a node wasn't found in the snapshot.
 var ErrNodeNotFound = errors.New("node not found")
+
+func InitializeClusterSnapshotOrDie(
+	snapshot ClusterSnapshot,
+	nodes []apiv1.Node,
+	pods []apiv1.Pod) {
+	var err error
+
+	snapshot.Clear()
+
+	for i := 0; i < len(nodes); i++ {
+		node := nodes[i]
+		err = snapshot.AddNode(&node)
+	}
+
+	for i := 0; i < len(pods); i++ {
+		pod := pods[i]
+		if pod.Spec.NodeName != "" {
+			err = snapshot.AddPod(&pod, pod.Spec.NodeName)
+		} else if pod.Status.NominatedNodeName != "" {
+			err = snapshot.AddPod(&pod, pod.Status.NominatedNodeName)
+		} else {
+			panic(err)
+		}
+	}
+}
